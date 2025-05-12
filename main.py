@@ -95,9 +95,9 @@ if st.button("Reset PC Values to Defaults"):
     st.session_state.pc29 = default_pc29
 
 # Sliders
-st.slider("PC 1 value", min_value=-50.0, max_value=50.0, key="pc1")
-st.slider("PC 4 value", min_value=-50.0, max_value=50.0, key="pc4")
-st.slider("PC 29 value", min_value=-50.0, max_value=50.0, key="pc29")
+st.slider("PC 1 value", min_value=-30.0, max_value=30.0, key="pc1")
+st.slider("PC 4 value", min_value=-30.0, max_value=30.0, key="pc4")
+st.slider("PC 29 value", min_value=-30.0, max_value=30.0, key="pc29")
 
 # Access values
 pc1 = st.session_state.pc1
