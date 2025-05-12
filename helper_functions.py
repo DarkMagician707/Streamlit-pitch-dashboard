@@ -1,5 +1,4 @@
 import parselmouth
-from pydub import AudioSegment
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -8,14 +7,7 @@ import torch.nn.functional as F
 import torchaudio
 from torchaudio.transforms import Resample
 import os
-import glob
-import subprocess
-from pathlib import Path 
-import joblib
-import IPython.display as display
 from scipy.stats import linregress
-import heapq
-import pickle
 from sklearn.decomposition import PCA
 from sklearn.decomposition import IncrementalPCA
 
