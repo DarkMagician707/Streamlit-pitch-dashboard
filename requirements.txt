@@ -8,5 +8,4 @@ seaborn
 joblib
 pathlib
 parselmouth
-os
 scipy
