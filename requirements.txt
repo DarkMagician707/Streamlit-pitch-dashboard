@@ -1,0 +1,12 @@
+torch
+torchaudio
+numpy
+streamlit
+scikit-learn
+matplotlib
+seaborn
+joblib
+pathlib
+parselmouth
+os
+scipy
