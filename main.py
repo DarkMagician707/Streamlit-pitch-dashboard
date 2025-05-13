@@ -89,60 +89,77 @@ try:
     col1.metric(label="Average Pitch", value=f"{avg_pitch:.3f} Hz")
     col2.metric(label="Standard Deviation of Pitch", value=f"{std_pitch:.3f} Hz")
 
-    # Reset button
+    # # Reset button
+    # if st.button("Reset PC Values to Defaults"):
+    #     st.session_state.pc1 = default_pc1
+    #     st.session_state.pc4 = default_pc4
+    #     st.session_state.pc29 = default_pc29
+
+    # # Sliders
+    # st.slider("PC 1 value", min_value=-30.0, max_value=30.0, key="pc1")
+    # st.slider("PC 4 value", min_value=-30.0, max_value=30.0, key="pc4")
+    # st.slider("PC 29 value", min_value=-30.0, max_value=30.0, key="pc29")
+
+    st.markdown("## Adjust Principal Components")
+
+    # col1, col2 = st.columns(2)
+
     if st.button("Reset PC Values to Defaults"):
         st.session_state.pc1 = default_pc1
         st.session_state.pc4 = default_pc4
         st.session_state.pc29 = default_pc29
 
-    # Sliders
-    st.slider("PC 1 value", min_value=-30.0, max_value=30.0, key="pc1")
-    st.slider("PC 4 value", min_value=-30.0, max_value=30.0, key="pc4")
-    st.slider("PC 29 value", min_value=-30.0, max_value=30.0, key="pc29")
+    st.slider("PC 1 value", min_value=-30.0, max_value=30.0, key="pc1", format="%.2f")
+    st.slider("PC 4 value", min_value=-30.0, max_value=30.0, key="pc4", format="%.2f")
+    st.slider("PC 29 value", min_value=-30.0, max_value=30.0, key="pc29", format="%.2f")
 
-    # Access values
-    pc1 = st.session_state.pc1
-    pc4 = st.session_state.pc4
-    pc29 = st.session_state.pc29
+    # Apply button
+    apply_changes = st.button("Apply PC Changes")
 
-    pc_dif1 = pc1 - compressed_x_mean[0, 0]
-    pc_dif4 = pc4 - compressed_x_mean[0, 3]
-    pc_dif29 = pc29 - compressed_x_mean[0, 28]
+    if apply_changes:
+        # Access values
+        pc1 = st.session_state.pc1
+        pc4 = st.session_state.pc4
+        pc29 = st.session_state.pc29
 
-    scaling = np.zeros(50)
-    scaling[0] = pc_dif1
-    scaling[3] = pc_dif4
-    scaling[28] = pc_dif29
+        pc_dif1 = pc1 - compressed_x_mean[0, 0]
+        pc_dif4 = pc4 - compressed_x_mean[0, 3]
+        pc_dif29 = pc29 - compressed_x_mean[0, 28]
 
-    # Cast scaling back up to normal dimension so that it can be added to audio frames to scale them in the higher dimension:
-    uncompressed_scaling = utt_pca.inverse_transform([scaling]) - utt_pca.mean_ #Result of shape (1, 1024)
-    # st.write(f"{uncompressed_scaling.shape}")
-    uncompressed_scaling = torch.from_numpy(uncompressed_scaling).float().to(device)
+        scaling = np.zeros(50)
+        scaling[0] = pc_dif1
+        scaling[3] = pc_dif4
+        scaling[28] = pc_dif29
 
-    # Broadcast across all frames
-    delta = uncompressed_scaling.expand(x.shape[0], -1)  # Shape: (T, 1024) where T is the number of frames in x
-    # st.write(f"{delta.shape}")
+        # Cast scaling back up to normal dimension so that it can be added to audio frames to scale them in the higher dimension:
+        uncompressed_scaling = utt_pca.inverse_transform([scaling]) - utt_pca.mean_ #Result of shape (1, 1024)
+        # st.write(f"{uncompressed_scaling.shape}")
+        uncompressed_scaling = torch.from_numpy(uncompressed_scaling).float().to(device)
 
-    # Apply change
-    x_modified = x + delta  # Shape: (T, 1024)
-    # st.write(f"{x_modified.shape}")
+        # Broadcast across all frames
+        delta = uncompressed_scaling.expand(x.shape[0], -1)  # Shape: (T, 1024) where T is the number of frames in x
+        # st.write(f"{delta.shape}")
 
-    # Generate new waveform
-    with torch.inference_mode():
-        wav_hat = hifigan(x_modified).squeeze().cpu().numpy()
+        # Apply change
+        x_modified = x + delta  # Shape: (T, 1024)
+        # st.write(f"{x_modified.shape}")
 
-    st.markdown("## Changed Audio")
-    st.audio(wav_hat, sample_rate=16000)
+        # Generate new waveform
+        with torch.inference_mode():
+            wav_hat = hifigan(x_modified).squeeze().cpu().numpy()
 
-    changed_avg_pitch = compute_avg_pitch_numpy(file=wav_hat)
-    changed_std_pitch = compute_std_pitch_numpy(file=wav_hat)
+        st.markdown("## Changed Audio")
+        st.audio(wav_hat, sample_rate=16000)
 
-    col1, col2 = st.columns(2)
-    col1.metric(label="Average Pitch of Changed Audio", value=f"{changed_avg_pitch:.3f} Hz")
-    col2.metric(label="Standard Deviation of Pitch of Changed Audio", value=f"{changed_std_pitch:.3f} Hz")
+        changed_avg_pitch = compute_avg_pitch_numpy(file=wav_hat)
+        changed_std_pitch = compute_std_pitch_numpy(file=wav_hat)
 
-    changed_plt = plot_spectrogram_numpy(file=wav_hat, max_freq=1000, window_len=0.04)
-    st.pyplot(changed_plt)
+        col1, col2 = st.columns(2)
+        col1.metric(label="Average Pitch of Changed Audio", value=f"{changed_avg_pitch:.3f} Hz")
+        col2.metric(label="Standard Deviation of Pitch of Changed Audio", value=f"{changed_std_pitch:.3f} Hz")
+
+        changed_plt = plot_spectrogram_numpy(file=wav_hat, max_freq=1000, window_len=0.04)
+        st.pyplot(changed_plt)
 
     st.markdown("## PC prediction using Linear Regression")
     st.write("Note: The linear model was trained using only the first 17 speakers of the LibriSpeech train-clean-100 dataset")
