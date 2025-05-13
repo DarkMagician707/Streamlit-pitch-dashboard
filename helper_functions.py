@@ -8,6 +8,7 @@ import torchaudio
 from torchaudio.transforms import Resample
 import os
 from scipy.stats import linregress
+import scipy.interpolate
 from sklearn.decomposition import PCA
 from sklearn.decomposition import IncrementalPCA
 
@@ -185,6 +186,26 @@ def compute_avg_pitch(file_path, pitch_floor = 80, pitch_ceiling = 400):
     
     return np.mean(pitch_values)
 
+def compute_avg_cleaned_pitch(file_path, pitch_floor = 80, pitch_ceiling = 400):
+    sound = parselmouth.Sound(file_path)
+    
+    # Extract pitch using Praat's method
+    pitch = sound.to_pitch(pitch_floor=pitch_floor, pitch_ceiling=pitch_ceiling)
+    # pitch = sound.to_pitch(pitch_floor = 50, pitch_ceiling = 800)
+    
+    # Get pitch values (ignoring unvoiced frames)
+    pitch_values = pitch.selected_array['frequency']
+    # print(pitch_values)
+    # pitch_values[pitch_values > 400] = 0 # Filter out random outliers that Parselmouth detects
+    pitch_values = pitch_values[pitch_values > 0]  # Remove zero (unvoiced parts)
+    # print(pitch_values)
+    cleaned_pitch, outlier_mask = detect_and_handle_pitch_outliers(pitch_values)
+
+    if len(cleaned_pitch) == 0:
+        return None  # No voiced frames detected
+    
+    return np.mean(cleaned_pitch)
+
 def compute_avg_pitch_numpy(file, sr = 16000, pitch_floor = 80, pitch_ceiling = 400):
     sound = parselmouth.Sound(values = file, sampling_frequency = sr)
     
@@ -203,6 +224,26 @@ def compute_avg_pitch_numpy(file, sr = 16000, pitch_floor = 80, pitch_ceiling = 
         return None  # No voiced frames detected
     
     return np.mean(pitch_values)
+
+def compute_avg_cleaned_pitch_numpy(file, sr = 16000, pitch_floor = 80, pitch_ceiling = 400):
+    sound = parselmouth.Sound(values = file, sampling_frequency = sr)
+    
+    # Extract pitch using Praat's method
+    pitch = sound.to_pitch(pitch_floor=pitch_floor, pitch_ceiling=pitch_ceiling)
+    # pitch = sound.to_pitch(pitch_floor = 50, pitch_ceiling = 800)
+    
+    # Get pitch values (ignoring unvoiced frames)
+    pitch_values = pitch.selected_array['frequency']
+    # print(pitch_values)
+    # pitch_values[pitch_values > 400] = 0 # Filter out random outliers that Parselmouth detects
+    pitch_values = pitch_values[pitch_values > 0]  # Remove zero (unvoiced parts)
+    # print(pitch_values)
+    cleaned_pitch, outlier_mask = detect_and_handle_pitch_outliers(pitch_values)
+
+    if len(cleaned_pitch) == 0:
+        return None  # No voiced frames detected
+    
+    return np.mean(cleaned_pitch)
 
 def compute_std_pitch(file_path, pitch_floor = 80, pitch_ceiling = 400):
     sound = parselmouth.Sound(file_path)
@@ -452,6 +493,20 @@ def draw_pitch(pitch, spectrogram):
     plt.ylim([0, spectrogram.ymax])  # Ensure pitch range matches spectrogram range
     plt.ylabel("fundamental frequency [Hz]")
 
+def draw_clean_pitch(pitch, spectrogram):
+    pitch_values = pitch.selected_array['frequency']
+    pitch_values[pitch_values == 0] = np.nan  # Remove unvoiced samples
+    pitch_values[pitch_values > 400] = np.nan  # Filter out high values
+
+    cleaned_pitch, outlier_mask = detect_and_handle_pitch_outliers(pitch_values)
+
+
+    plt.plot(pitch.xs(), cleaned_pitch, 'o', markersize=5, color='w', label="Pitch")
+    plt.plot(pitch.xs(), cleaned_pitch, 'o', markersize=2, color='red')
+
+    plt.ylim([0, spectrogram.ymax])  # Ensure pitch range matches spectrogram range
+    plt.ylabel("fundamental frequency [Hz]")
+
 def plot_spectrogram(path, max_freq = 2000, window_len = 0.03, dynamic_range=70, pitch=None):
     snd = parselmouth.Sound(path)
     spectrogram = snd.to_spectrogram(window_length = window_len, maximum_frequency = max_freq)
@@ -478,6 +533,38 @@ def plot_spectrogram(path, max_freq = 2000, window_len = 0.03, dynamic_range=70,
     # Plot pitch contour
     plt.twinx()
     draw_pitch(pitch, spectrogram=spectrogram)
+
+    plt.xlim([snd.xmin, snd.xmax])
+    plt.title("Spectrogram with Aligned Pitch Contour")
+    return plt
+    # plt.show() # or plt.savefig("spectrogram_0.03.pdf")
+
+def plot_spectrogram_clean(path, max_freq = 2000, window_len = 0.03, dynamic_range=70, pitch=None):
+    snd = parselmouth.Sound(path)
+    spectrogram = snd.to_spectrogram(window_length = window_len, maximum_frequency = max_freq)
+
+    X, Y = spectrogram.x_grid(), spectrogram.y_grid()
+    sg_db = 10 * np.log10(spectrogram.values)
+
+    plt.figure(figsize=(20, 7))
+    plt.pcolormesh(X, Y, sg_db, vmin=sg_db.max() - dynamic_range, cmap='inferno_r', shading='auto')
+    
+    # Restrict frequency range to match pitch
+    if pitch:
+        plt.ylim([0, pitch.ceiling])
+    else:
+        plt.ylim([spectrogram.ymin, spectrogram.ymax])
+    # else:
+    #     plt.ylim([spectrogram.ymin, 2000])
+
+    plt.xlabel("Time [s]")
+    plt.ylabel("Frequency [Hz]")
+
+    pitch = snd.to_pitch(pitch_floor = 80, pitch_ceiling = 400)
+
+    # Plot pitch contour
+    plt.twinx()
+    draw_clean_pitch(pitch, spectrogram=spectrogram)
 
     plt.xlim([snd.xmin, snd.xmax])
     plt.title("Spectrogram with Aligned Pitch Contour")
@@ -514,3 +601,84 @@ def plot_spectrogram_numpy(file, sr = 16000, max_freq = 2000, window_len = 0.03,
     plt.xlim([snd.xmin, snd.xmax])
     plt.title("Spectrogram with Aligned Pitch Contour")
     return plt
+
+def plot_spectrogram_numpy_clean(file, sr = 16000, max_freq = 2000, window_len = 0.03, dynamic_range=70, pitch=None):
+    snd = parselmouth.Sound(values = file, sampling_frequency = sr)
+    spectrogram = snd.to_spectrogram(window_length = window_len, maximum_frequency = max_freq)
+
+    X, Y = spectrogram.x_grid(), spectrogram.y_grid()
+    sg_db = 10 * np.log10(spectrogram.values)
+
+    plt.figure(figsize=(20, 7))
+    plt.pcolormesh(X, Y, sg_db, vmin=sg_db.max() - dynamic_range, cmap='inferno_r', shading='auto')
+    
+    # Restrict frequency range to match pitch
+    if pitch:
+        plt.ylim([0, pitch.ceiling])
+    else:
+        plt.ylim([spectrogram.ymin, spectrogram.ymax])
+    # else:
+    #     plt.ylim([spectrogram.ymin, 2000])
+
+    plt.xlabel("Time [s]")
+    plt.ylabel("Frequency [Hz]")
+
+    pitch = snd.to_pitch(pitch_floor = 80, pitch_ceiling = 400)
+
+    # Plot pitch contour
+    plt.twinx()
+    draw_clean_pitch(pitch, spectrogram=spectrogram)
+
+    plt.xlim([snd.xmin, snd.xmax])
+    plt.title("Spectrogram with Aligned Pitch Contour")
+    return plt
+
+def detect_and_handle_pitch_outliers(pitch_values):
+    pitch_values = np.array(pitch_values)
+    
+    # Identify voiced frames: non-zero, non-nan
+    is_voiced = (pitch_values > 0) & (~np.isnan(pitch_values))
+    voiced_values = pitch_values[is_voiced]
+
+    if len(voiced_values) < 2:
+        # Not enough data to clean
+        return pitch_values.copy(), np.zeros_like(pitch_values, dtype=bool)
+
+    # Detect outliers using IQR
+    Q1 = np.percentile(voiced_values, 25)
+    Q3 = np.percentile(voiced_values, 75)
+    IQR = Q3 - Q1
+    threshold = 2.5
+    lower_bound = Q1 - threshold * IQR
+    upper_bound = Q3 + threshold * IQR
+
+    # Outlier mask (only on voiced frames)
+    outlier_mask = np.zeros_like(pitch_values, dtype=bool)
+    outlier_mask[is_voiced] = (pitch_values[is_voiced] < lower_bound) | (pitch_values[is_voiced] > upper_bound)
+
+    # Create new array with cleaned values
+    cleaned_pitch = pitch_values.copy()
+
+    # Indices of non-outlier voiced frames (valid for interpolation)
+    valid_voiced_indices = np.where(is_voiced & ~outlier_mask)[0]
+    valid_voiced_values = pitch_values[valid_voiced_indices]
+
+    # Indices of outlier voiced frames to interpolate
+    outlier_voiced_indices = np.where(outlier_mask)[0]
+
+    if len(valid_voiced_indices) >= 2:
+        interp_func = scipy.interpolate.interp1d(
+            valid_voiced_indices,
+            valid_voiced_values,
+            kind='linear',
+            bounds_error=False,
+            fill_value="extrapolate"
+        )
+        cleaned_pitch[outlier_voiced_indices] = interp_func(outlier_voiced_indices)
+    else:
+        # Fallback to median if not enough valid points
+        fallback_value = np.median(voiced_values)
+        cleaned_pitch[outlier_voiced_indices] = fallback_value
+
+    # Unvoiced values are preserved
+    return cleaned_pitch, outlier_mask

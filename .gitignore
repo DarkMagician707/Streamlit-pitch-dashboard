@@ -3,3 +3,5 @@ __pycache__/
 *.py[cod]
 train_linear_reg.py
 wavlm-feature-extraction.py
+train_rf.py
+models/VCTK-random-forest-most-linear-pcs-with-labels.pkl

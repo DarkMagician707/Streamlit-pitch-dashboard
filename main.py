@@ -8,7 +8,8 @@ from sklearn.decomposition import IncrementalPCA
 from sklearn.linear_model import LinearRegression
 import joblib
 from pathlib import Path
-from helper_functions import compute_avg_pitch, compute_std_pitch, plot_spectrogram, plot_spectrogram_numpy, compute_avg_pitch_numpy, compute_std_pitch_numpy
+from helper_functions import compute_avg_pitch, compute_std_pitch, plot_spectrogram, plot_spectrogram_numpy, plot_spectrogram_clean, plot_spectrogram_numpy_clean
+from helper_functions import compute_avg_pitch_numpy, compute_std_pitch_numpy, compute_avg_cleaned_pitch, compute_avg_cleaned_pitch_numpy
 
 st.set_page_config(layout="wide")
 
@@ -24,11 +25,13 @@ def load_models():
     linear_model_pc1 = joblib.load(f"models/Linear-Regression-PC1-LibriSpeech-train-clean-100-17-speakers.pkl")
     linear_model_pc4 = joblib.load(f"models/Linear-Regression-PC4-LibriSpeech-train-clean-100-17-speakers.pkl")
     linear_model_pc29 = joblib.load(f"models/Linear-Regression-PC29-LibriSpeech-train-clean-100-17-speakers.pkl")
+    rf_model = joblib.load(f"models/VCTK-random-forest-most-linear-pcs.pkl")
+    # rf_model = joblib.load(f"models/VCTK-random-forest-most-linear-pcs-with-labels.pkl")
     # linear_model = joblib.load(f"models/Linear-Regression-LibriSpeech-train-clean-100-17-speakers-with-labels.pkl")
-    return wavlm, hifigan, utt_pca, linear_model_pc1, linear_model_pc4, linear_model_pc29
+    return wavlm, hifigan, utt_pca, linear_model_pc1, linear_model_pc4, linear_model_pc29, rf_model
 
 # Use the cached function
-wavlm, hifigan, utt_pca, lin_model_pc1, lin_model_pc4, lin_model_pc29 = load_models()
+wavlm, hifigan, utt_pca, lin_model_pc1, lin_model_pc4, lin_model_pc29, rf_model = load_models()
 
 st.title("Pitch control using PCA")
 
@@ -79,15 +82,15 @@ try:
     st.markdown("## Original Audio")
     st.audio(audio_path)
 
-    plt = plot_spectrogram(audio_path, max_freq=1000, window_len=0.04)
+    plt = plot_spectrogram_clean(audio_path, max_freq=1000, window_len=0.04)
     st.pyplot(plt)
 
-    avg_pitch = compute_avg_pitch(audio_path)
-    std_pitch = compute_std_pitch(audio_path)
+    avg_original_pitch = compute_avg_cleaned_pitch(audio_path)
+    std_original_pitch = compute_std_pitch(audio_path)
 
     col1, col2 = st.columns(2)
-    col1.metric(label="Average Pitch", value=f"{avg_pitch:.3f} Hz")
-    col2.metric(label="Standard Deviation of Pitch", value=f"{std_pitch:.3f} Hz")
+    col1.metric(label="Average Pitch", value=f"{avg_original_pitch:.3f} Hz")
+    col2.metric(label="Standard Deviation of Pitch", value=f"{std_original_pitch:.3f} Hz")
 
     # # Reset button
     # if st.button("Reset PC Values to Defaults"):
@@ -109,9 +112,15 @@ try:
         st.session_state.pc4 = default_pc4
         st.session_state.pc29 = default_pc29
 
-    st.slider("PC 1 value", min_value=-30.0, max_value=30.0, key="pc1", format="%.2f")
-    st.slider("PC 4 value", min_value=-30.0, max_value=30.0, key="pc4", format="%.2f")
-    st.slider("PC 29 value", min_value=-30.0, max_value=30.0, key="pc29", format="%.2f")
+    pc1_value = st.session_state.get("pc1", default_pc1)
+    pc4_value = st.session_state.get("pc4", default_pc4)
+    pc29_value = st.session_state.get("pc29", default_pc29)
+
+    pc1 = st.slider("PC 1 value", min_value=-30.0, max_value=30.0, value=pc1_value, key="pc1_slider", format="%.2f")
+    pc4 = st.slider("PC 4 value", min_value=-30.0, max_value=30.0, value=pc4_value, key="pc4_slider", format="%.2f")
+    # st.slider("PC 1 value", min_value=-30.0, max_value=30.0, key="pc1", format="%.2f")
+    # st.slider("PC 4 value", min_value=-30.0, max_value=30.0, key="pc4", format="%.2f")
+    # st.slider("PC 29 value", min_value=-30.0, max_value=30.0, key="pc29", format="%.2f")
 
     # Apply button
     apply_changes = st.button("Apply PC Changes")
@@ -151,14 +160,14 @@ try:
         st.markdown("## Changed Audio")
         st.audio(wav_hat, sample_rate=16000)
 
-        changed_avg_pitch = compute_avg_pitch_numpy(file=wav_hat)
+        changed_avg_pitch = compute_avg_cleaned_pitch_numpy(file=wav_hat)
         changed_std_pitch = compute_std_pitch_numpy(file=wav_hat)
 
         col1, col2 = st.columns(2)
         col1.metric(label="Average Pitch of Changed Audio", value=f"{changed_avg_pitch:.3f} Hz")
         col2.metric(label="Standard Deviation of Pitch of Changed Audio", value=f"{changed_std_pitch:.3f} Hz")
 
-        changed_plt = plot_spectrogram_numpy(file=wav_hat, max_freq=1000, window_len=0.04)
+        changed_plt = plot_spectrogram_numpy_clean(file=wav_hat, max_freq=1000, window_len=0.04)
         st.pyplot(changed_plt)
 
     st.markdown("## PC prediction using Linear Regression")
@@ -181,10 +190,60 @@ try:
     target_pitch_np = np.array([[target_pitch_float]])
     target_pc1 = lin_model_pc1.predict(target_pitch_np)
     target_pc4 = lin_model_pc4.predict(target_pitch_np)
-    target_pc29 = lin_model_pc29.predict(target_pitch_np)
+    # target_pc29 = lin_model_pc29.predict(target_pitch_np)
 
     st.metric(label="Required PC 1 value", value=target_pc1)
     st.metric(label="Required PC 4 value", value=target_pc4)
-    st.metric(label="Required PC 29 value", value=target_pc29)
+
+    if st.button(label="Apply LR PC values"):
+        st.session_state["pc1"] = float(target_pc1)
+        st.session_state["pc4"] = float(target_pc4)
+        st.rerun()
+    # st.metric(label="Required PC 29 value", value=target_pc29)
+
+    # RF with no gender label:
+
+    st.markdown("## PC prediction using Random Forest")
+    st.write("Note: The Random Forest was trained using the VCTK dataset, using an anchor-targets approach")
+    
+    current_pitch_float = float(avg_original_pitch)
+    current_pitch_np = np.array([[current_pitch_float]])
+    
+    # st.write(current_pitch_np)
+    # st.write(target_pitch_np)
+    # st.write(compressed_x_mean)
+    x = np.hstack([current_pitch_np, target_pitch_np, compressed_x_mean[:, [0, 3]]])
+
+    y_hat = rf_model.predict(x)
+    st.metric(label="Required PC 1 value", value=y_hat[:, 0])
+    st.metric(label="Required PC 4 value", value=y_hat[:, 1])
+    # st.metric(label="Required PC 29 value", value=y_hat[:, 2])
+
+    if st.button(label="Apply RF PC values"):
+        st.session_state.pc1 = float(y_hat[:, 0])
+        st.session_state.pc4 = float(y_hat[:, 1])
+        st.rerun()
+
+    # RF with gender label:
+
+    # st.markdown("## PC prediction using Random Forest")
+    # st.write("Note: The Random Forest was trained using the VCTK dataset, using an anchor-targets approach")
+    
+    # current_pitch_float = float(avg_original_pitch)
+    # current_pitch_np = np.array([[current_pitch_float]])
+    # current_label = st.text_input("Please enter if the current speaker is male (0) or female (1). Only the number", value = "0.0")
+    # current_label_float = float(current_label)
+    # current_label_np = np.array([[current_label_float]])
+    
+    # # st.write(current_pitch_np)
+    # # st.write(target_pitch_np)
+    # # st.write(compressed_x_mean)
+    # x = np.hstack([current_pitch_np, target_pitch_np, compressed_x_mean[:, 0:30], current_label_np])
+
+    # y_hat = rf_model.predict(x)
+    # st.metric(label="Required PC 1 value", value=y_hat[:, 0])
+    # st.metric(label="Required PC 4 value", value=y_hat[:, 1])
+    # # st.metric(label="Required PC 29 value", value=y_hat[:, 2])
 except Exception as e:
     st.error(f"Error while loading spectrogram. It's a problem with the slider sensitivity, please reload and try not to move sliders for too long at a time :)")
+    st.error(f"{e}")
