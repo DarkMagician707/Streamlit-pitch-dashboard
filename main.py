@@ -15,7 +15,6 @@ st.set_page_config(layout="wide")
 
 # Set the GPU to run all calculations when using torch
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-clean = False
 
 @st.cache_resource
 def load_models():
@@ -23,8 +22,8 @@ def load_models():
     wavlm = torch.hub.load("bshall/knn-vc", "wavlm_large", trust_repo=True, device=device)
     hifigan, _ = torch.hub.load("bshall/knn-vc", "hifigan_wavlm", trust_repo=True, device=device)
     utt_pca = joblib.load(f"models/utterance_level_train-100_pca_model_50_components.pkl")
-    # linear_model_pc1 = joblib.load(f"models/Linear-Regression-PC1-LibriSpeech-train-clean-100-17-speakers.pkl")
-    # linear_model_pc4 = joblib.load(f"models/Linear-Regression-PC4-LibriSpeech-train-clean-100-17-speakers.pkl")
+    linear_model_lib_pc1 = joblib.load(f"models/Linear-Regression-PC1-LibriSpeech-train-clean-100-17-speakers.pkl")
+    linear_model_lib_pc4 = joblib.load(f"models/Linear-Regression-PC4-LibriSpeech-train-clean-100-17-speakers.pkl")
     # linear_model_pc29 = joblib.load(f"models/Linear-Regression-PC29-LibriSpeech-train-clean-100-17-speakers.pkl")
 
     linear_model_pc1 = joblib.load("/home/kyle/Projects/Streamlit-pitch-dashboard/models/Linear-Regression-PC1-VCTK-speakers.pkl")
@@ -32,10 +31,10 @@ def load_models():
     rf_model = joblib.load(f"models/VCTK-random-forest-most-linear-pcs.pkl")
     # rf_model = joblib.load(f"models/VCTK-random-forest-most-linear-pcs-with-labels.pkl")
     # linear_model = joblib.load(f"models/Linear-Regression-LibriSpeech-train-clean-100-17-speakers-with-labels.pkl")
-    return wavlm, hifigan, utt_pca, linear_model_pc1, linear_model_pc4, rf_model
+    return wavlm, hifigan, utt_pca, linear_model_pc1, linear_model_pc4, linear_model_lib_pc1, linear_model_lib_pc4, rf_model
 
 # Use the cached function
-wavlm, hifigan, utt_pca, lin_model_pc1, lin_model_pc4, rf_model = load_models()
+wavlm, hifigan, utt_pca, lin_model_pc1, lin_model_pc4, lin_model_lib_pc1, lin_model_lib_pc4, rf_model = load_models()
 
 st.title("Pitch control using PCA")
 
@@ -44,6 +43,8 @@ folder_path = Path('audio/')
 
 # Get all files (not directories)
 file_names = [f.name for f in sorted(folder_path.iterdir()) if f.is_file()]
+
+clean = st.toggle(label="Clean Pitch", value=False)
 
 st.markdown("### Audio file")
 audio_file = st.selectbox(label="", options=file_names)
@@ -182,7 +183,7 @@ try:
             changed_plt = plot_spectrogram_numpy(file=wav_hat, max_freq=1000, window_len=0.04)
         st.pyplot(changed_plt)
 
-    st.markdown("## PC prediction using Linear Regression")
+    st.markdown("## PC prediction using VCTK Linear Regression")
     st.write("Note: The linear model was trained using all utterance data in the VCTK dataset")
 
     # col1, col2 = st.columns(2)
@@ -207,9 +208,24 @@ try:
     st.metric(label="Required PC 1 value", value=target_pc1)
     st.metric(label="Required PC 4 value", value=target_pc4)
 
-    if st.button(label="Apply LR PC values"):
+    if st.button(label="Apply VCTK LR PC values"):
         st.session_state["pc1"] = float(target_pc1)
         st.session_state["pc4"] = float(target_pc4)
+        st.rerun()
+
+    st.markdown("## PC prediction using LibriSpeech Linear Regression")
+    st.write("Note: The linear model was trained using the first 17 speakers of the LibriSpeech train-clean-100 dataset")
+    
+    target_lib_pc1 = lin_model_lib_pc1.predict(target_pitch_np)
+    target_lib_pc4 = lin_model_lib_pc4.predict(target_pitch_np)
+    # target_pc29 = lin_model_pc29.predict(target_pitch_np)
+
+    st.metric(label="Required PC 1 value", value=target_lib_pc1)
+    st.metric(label="Required PC 4 value", value=target_lib_pc4)
+
+    if st.button(label="Apply LibriSpeech LR PC values"):
+        st.session_state["pc1"] = float(target_lib_pc1)
+        st.session_state["pc4"] = float(target_lib_pc4)
         st.rerun()
     # st.metric(label="Required PC 29 value", value=target_pc29)
 
