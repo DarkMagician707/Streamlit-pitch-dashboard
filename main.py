@@ -15,6 +15,7 @@ st.set_page_config(layout="wide")
 
 # Set the GPU to run all calculations when using torch
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+clean = False
 
 @st.cache_resource
 def load_models():
@@ -22,16 +23,19 @@ def load_models():
     wavlm = torch.hub.load("bshall/knn-vc", "wavlm_large", trust_repo=True, device=device)
     hifigan, _ = torch.hub.load("bshall/knn-vc", "hifigan_wavlm", trust_repo=True, device=device)
     utt_pca = joblib.load(f"models/utterance_level_train-100_pca_model_50_components.pkl")
-    linear_model_pc1 = joblib.load(f"models/Linear-Regression-PC1-LibriSpeech-train-clean-100-17-speakers.pkl")
-    linear_model_pc4 = joblib.load(f"models/Linear-Regression-PC4-LibriSpeech-train-clean-100-17-speakers.pkl")
-    linear_model_pc29 = joblib.load(f"models/Linear-Regression-PC29-LibriSpeech-train-clean-100-17-speakers.pkl")
+    # linear_model_pc1 = joblib.load(f"models/Linear-Regression-PC1-LibriSpeech-train-clean-100-17-speakers.pkl")
+    # linear_model_pc4 = joblib.load(f"models/Linear-Regression-PC4-LibriSpeech-train-clean-100-17-speakers.pkl")
+    # linear_model_pc29 = joblib.load(f"models/Linear-Regression-PC29-LibriSpeech-train-clean-100-17-speakers.pkl")
+
+    linear_model_pc1 = joblib.load("/home/kyle/Projects/Streamlit-pitch-dashboard/models/Linear-Regression-PC1-VCTK-speakers.pkl")
+    linear_model_pc4 = joblib.load("/home/kyle/Projects/Streamlit-pitch-dashboard/models/Linear-Regression-PC4-VCTK-speakers.pkl")
     rf_model = joblib.load(f"models/VCTK-random-forest-most-linear-pcs.pkl")
     # rf_model = joblib.load(f"models/VCTK-random-forest-most-linear-pcs-with-labels.pkl")
     # linear_model = joblib.load(f"models/Linear-Regression-LibriSpeech-train-clean-100-17-speakers-with-labels.pkl")
-    return wavlm, hifigan, utt_pca, linear_model_pc1, linear_model_pc4, linear_model_pc29, rf_model
+    return wavlm, hifigan, utt_pca, linear_model_pc1, linear_model_pc4, rf_model
 
 # Use the cached function
-wavlm, hifigan, utt_pca, lin_model_pc1, lin_model_pc4, lin_model_pc29, rf_model = load_models()
+wavlm, hifigan, utt_pca, lin_model_pc1, lin_model_pc4, rf_model = load_models()
 
 st.title("Pitch control using PCA")
 
@@ -81,11 +85,15 @@ if st.session_state.last_audio_file != audio_file:
 try:
     st.markdown("## Original Audio")
     st.audio(audio_path)
-
-    plt = plot_spectrogram_clean(audio_path, max_freq=1000, window_len=0.04)
+    if clean:
+        plt = plot_spectrogram_clean(audio_path, max_freq=1000, window_len=0.04)
+        avg_original_pitch = compute_avg_cleaned_pitch(audio_path)
+    else:
+        plt = plot_spectrogram(audio_path, max_freq=1000, window_len=0.04)
+        avg_original_pitch = compute_avg_pitch(audio_path)
     st.pyplot(plt)
 
-    avg_original_pitch = compute_avg_cleaned_pitch(audio_path)
+    
     std_original_pitch = compute_std_pitch(audio_path)
 
     col1, col2 = st.columns(2)
@@ -159,19 +167,23 @@ try:
 
         st.markdown("## Changed Audio")
         st.audio(wav_hat, sample_rate=16000)
-
-        changed_avg_pitch = compute_avg_cleaned_pitch_numpy(file=wav_hat)
+        if clean:
+            changed_avg_pitch = compute_avg_cleaned_pitch_numpy(file=wav_hat)
+        else:
+            changed_avg_pitch = compute_avg_pitch_numpy(file=wav_hat)
         changed_std_pitch = compute_std_pitch_numpy(file=wav_hat)
 
         col1, col2 = st.columns(2)
         col1.metric(label="Average Pitch of Changed Audio", value=f"{changed_avg_pitch:.3f} Hz")
         col2.metric(label="Standard Deviation of Pitch of Changed Audio", value=f"{changed_std_pitch:.3f} Hz")
-
-        changed_plt = plot_spectrogram_numpy_clean(file=wav_hat, max_freq=1000, window_len=0.04)
+        if clean:
+            changed_plt = plot_spectrogram_numpy_clean(file=wav_hat, max_freq=1000, window_len=0.04)
+        else:
+            changed_plt = plot_spectrogram_numpy(file=wav_hat, max_freq=1000, window_len=0.04)
         st.pyplot(changed_plt)
 
     st.markdown("## PC prediction using Linear Regression")
-    st.write("Note: The linear model was trained using only the first 17 speakers of the LibriSpeech train-clean-100 dataset")
+    st.write("Note: The linear model was trained using all utterance data in the VCTK dataset")
 
     # col1, col2 = st.columns(2)
     # target_pitch = col1.text_input("Please enter desired target Pitch (Hz value only)", value="0.0")
