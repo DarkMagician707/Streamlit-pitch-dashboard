@@ -9,7 +9,7 @@ from sklearn.linear_model import LinearRegression
 import joblib
 from pathlib import Path
 from helper_functions import compute_avg_pitch, compute_std_pitch, plot_spectrogram, plot_spectrogram_numpy, plot_spectrogram_clean, plot_spectrogram_numpy_clean
-from helper_functions import compute_avg_pitch_numpy, compute_std_pitch_numpy, compute_avg_cleaned_pitch, compute_avg_cleaned_pitch_numpy
+from helper_functions import compute_avg_pitch_numpy, compute_std_pitch_numpy, compute_avg_cleaned_pitch, compute_avg_cleaned_pitch_numpy, plot_pc_vs_time
 
 st.set_page_config(layout="wide")
 
@@ -55,6 +55,7 @@ wav = wav.to(device)
 # Feature extraction
 with torch.inference_mode():
     x, _ = wavlm.extract_features(wav, output_layer=6)
+    x_copy = x.squeeze(0).cpu().numpy()
     x_mean = x.mean(dim=1)
     x_mean = x_mean.cpu().numpy()
 
@@ -142,12 +143,10 @@ try:
 
         pc_dif1 = pc1 - compressed_x_mean[0, 0]
         pc_dif4 = pc4 - compressed_x_mean[0, 3]
-        pc_dif29 = pc29 - compressed_x_mean[0, 28]
 
         scaling = np.zeros(50)
         scaling[0] = pc_dif1
         scaling[3] = pc_dif4
-        scaling[28] = pc_dif29
 
         # Cast scaling back up to normal dimension so that it can be added to audio frames to scale them in the higher dimension:
         uncompressed_scaling = utt_pca.inverse_transform([scaling]) - utt_pca.mean_ #Result of shape (1, 1024)
@@ -240,9 +239,9 @@ try:
     # st.write(current_pitch_np)
     # st.write(target_pitch_np)
     # st.write(compressed_x_mean)
-    x = np.hstack([current_pitch_np, target_pitch_np, compressed_x_mean[:, [0, 3]]])
+    X = np.hstack([current_pitch_np, target_pitch_np, compressed_x_mean[:, [0, 3]]])
 
-    y_hat = rf_model.predict(x)
+    y_hat = rf_model.predict(X)
     st.metric(label="Required PC 1 value", value=y_hat[:, 0])
     st.metric(label="Required PC 4 value", value=y_hat[:, 1])
     # st.metric(label="Required PC 29 value", value=y_hat[:, 2])
@@ -272,6 +271,15 @@ try:
     # st.metric(label="Required PC 1 value", value=y_hat[:, 0])
     # st.metric(label="Required PC 4 value", value=y_hat[:, 1])
     # # st.metric(label="Required PC 29 value", value=y_hat[:, 2])
+
+    # Visualize original audio's PCs over time
+    # st.markdown("## PC1 over time")
+    # st.write(x_copy.shape)
+    # converted_x = utt_pca.transform(x_copy)
+    # pc1_plt = plot_pc_vs_time(x[:, 0], "1")
+    # pc4_plt = plot_pc_vs_time(x[:, 3], "4")
+    # st.pyplot(pc1_plt)
+    # st.pyplot(pc4_plt)
 except Exception as e:
     st.error(f"Error while loading spectrogram. It's a problem with the slider sensitivity, please reload and try not to move sliders for too long at a time :)")
     st.error(f"{e}")

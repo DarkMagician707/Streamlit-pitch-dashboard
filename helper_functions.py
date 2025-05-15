@@ -167,7 +167,7 @@ def get_speaker_utterances_lib(data_path, speaker_file, num_speakers=None):
     return speaker_data
 
 
-def compute_avg_pitch(file_path, pitch_floor = 80, pitch_ceiling = 400):
+def compute_avg_pitch(file_path, pitch_floor = 70, pitch_ceiling = 400):
     sound = parselmouth.Sound(file_path)
     
     # Extract pitch using Praat's method
@@ -186,7 +186,7 @@ def compute_avg_pitch(file_path, pitch_floor = 80, pitch_ceiling = 400):
     
     return np.mean(pitch_values)
 
-def compute_avg_cleaned_pitch(file_path, pitch_floor = 80, pitch_ceiling = 400):
+def compute_avg_cleaned_pitch(file_path, pitch_floor = 70, pitch_ceiling = 400):
     sound = parselmouth.Sound(file_path)
     
     # Extract pitch using Praat's method
@@ -206,7 +206,7 @@ def compute_avg_cleaned_pitch(file_path, pitch_floor = 80, pitch_ceiling = 400):
     
     return np.mean(cleaned_pitch)
 
-def compute_avg_pitch_numpy(file, sr = 16000, pitch_floor = 80, pitch_ceiling = 400):
+def compute_avg_pitch_numpy(file, sr = 16000, pitch_floor = 70, pitch_ceiling = 400):
     sound = parselmouth.Sound(values = file, sampling_frequency = sr)
     
     # Extract pitch using Praat's method
@@ -225,7 +225,7 @@ def compute_avg_pitch_numpy(file, sr = 16000, pitch_floor = 80, pitch_ceiling = 
     
     return np.mean(pitch_values)
 
-def compute_avg_cleaned_pitch_numpy(file, sr = 16000, pitch_floor = 80, pitch_ceiling = 400):
+def compute_avg_cleaned_pitch_numpy(file, sr = 16000, pitch_floor = 70, pitch_ceiling = 400):
     sound = parselmouth.Sound(values = file, sampling_frequency = sr)
     
     # Extract pitch using Praat's method
@@ -245,7 +245,7 @@ def compute_avg_cleaned_pitch_numpy(file, sr = 16000, pitch_floor = 80, pitch_ce
     
     return np.mean(cleaned_pitch)
 
-def compute_std_pitch(file_path, pitch_floor = 80, pitch_ceiling = 400):
+def compute_std_pitch(file_path, pitch_floor = 70, pitch_ceiling = 400):
     sound = parselmouth.Sound(file_path)
     
     # Extract pitch using Praat's method
@@ -264,7 +264,7 @@ def compute_std_pitch(file_path, pitch_floor = 80, pitch_ceiling = 400):
     
     return np.std(pitch_values)
 
-def compute_std_pitch_numpy(file, sr = 16000, pitch_floor = 80, pitch_ceiling = 400):
+def compute_std_pitch_numpy(file, sr = 16000, pitch_floor = 70, pitch_ceiling = 400):
     sound = parselmouth.Sound(values = file, sampling_frequency = sr)
     
     # Extract pitch using Praat's method
@@ -482,6 +482,14 @@ def plot_waveform(path):
     plt.title("Waveform of audio file")
     plt.show() # or plt.savefig("sound.png"), or plt.savefig("sound.pdf")
 
+def draw_pc(pcs, spectrogram):
+
+    plt.plot(spectrogram.xs(), pcs, 'o', markersize=5, color='w', label="Pitch")
+    plt.plot(spectrogram.xs(), pcs, 'o', markersize=2, color='blue')
+
+    plt.ylim([0, spectrogram.ymax])  # Ensure pitch range matches spectrogram range
+    plt.ylabel("fundamental frequency [Hz]")
+
 def draw_pitch(pitch, spectrogram):
     pitch_values = pitch.selected_array['frequency']
     pitch_values[pitch_values == 0] = np.nan  # Remove unvoiced samples
@@ -528,7 +536,7 @@ def plot_spectrogram(path, max_freq = 2000, window_len = 0.03, dynamic_range=70,
     plt.xlabel("Time [s]")
     plt.ylabel("Frequency [Hz]")
 
-    pitch = snd.to_pitch(pitch_floor = 80, pitch_ceiling = 400)
+    pitch = snd.to_pitch(pitch_floor = 70, pitch_ceiling = 400)
 
     # Plot pitch contour
     plt.twinx()
@@ -560,7 +568,7 @@ def plot_spectrogram_clean(path, max_freq = 2000, window_len = 0.03, dynamic_ran
     plt.xlabel("Time [s]")
     plt.ylabel("Frequency [Hz]")
 
-    pitch = snd.to_pitch(pitch_floor = 80, pitch_ceiling = 400)
+    pitch = snd.to_pitch(pitch_floor = 70, pitch_ceiling = 400)
 
     # Plot pitch contour
     plt.twinx()
@@ -592,7 +600,7 @@ def plot_spectrogram_numpy(file, sr = 16000, max_freq = 2000, window_len = 0.03,
     plt.xlabel("Time [s]")
     plt.ylabel("Frequency [Hz]")
 
-    pitch = snd.to_pitch(pitch_floor = 80, pitch_ceiling = 400)
+    pitch = snd.to_pitch(pitch_floor = 70, pitch_ceiling = 400)
 
     # Plot pitch contour
     plt.twinx()
@@ -623,7 +631,7 @@ def plot_spectrogram_numpy_clean(file, sr = 16000, max_freq = 2000, window_len =
     plt.xlabel("Time [s]")
     plt.ylabel("Frequency [Hz]")
 
-    pitch = snd.to_pitch(pitch_floor = 80, pitch_ceiling = 400)
+    pitch = snd.to_pitch(pitch_floor = 70, pitch_ceiling = 400)
 
     # Plot pitch contour
     plt.twinx()
@@ -631,6 +639,24 @@ def plot_spectrogram_numpy_clean(file, sr = 16000, max_freq = 2000, window_len =
 
     plt.xlim([snd.xmin, snd.xmax])
     plt.title("Spectrogram with Aligned Pitch Contour")
+    return plt
+
+def plot_pc_vs_time(pcs, label):
+    # Define frame shift (in seconds)
+    frame_shift = 0.02  # WavLM uses 20 ms frames for audio
+
+    # Time axis
+    time_axis = np.arange(len(pcs)) * frame_shift
+
+    # Plotting
+    plt.figure(figsize=(10, 4))
+    plt.plot(time_axis, pcs, marker='o', linestyle='-')
+    plt.title(f"PC {label} Values Over Time")
+    plt.xlabel("Time (s)")
+    plt.ylabel(f"PC {label}Value")
+    plt.grid(True)
+    plt.tight_layout()
+    # plt.show()
     return plt
 
 def detect_and_handle_pitch_outliers(pitch_values):
