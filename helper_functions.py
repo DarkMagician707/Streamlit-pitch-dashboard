@@ -1,4 +1,5 @@
 import parselmouth
+from parselmouth.praat import call
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -283,6 +284,70 @@ def compute_std_pitch_numpy(file, sr = 16000, pitch_floor = 70, pitch_ceiling = 
     
     return np.std(pitch_values)
 
+def compute_avg_intensity(file_path):
+    sound = parselmouth.Sound(file_path)
+    
+    # Extract intensity using Praat's method
+    # intensity = sound.to_intensity(subtract_mean=False)
+    intensity = sound.to_intensity()
+    
+    # Get intensity values
+    intensity_values = intensity.values
+    intensity_values = intensity_values[intensity_values > 0]  # Remove zero (unvoiced parts)
+
+    if len(intensity_values) == 0:
+        return None  # No voiced frames detected
+    
+    return np.mean(intensity_values)
+
+def compute_std_intensity(file_path):
+    sound = parselmouth.Sound(file_path)
+    
+    # Extract intensity using Praat's method
+    # intensity = sound.to_intensity(subtract_mean=False)
+    intensity = sound.to_intensity()
+    
+    # Get intensity values
+    intensity_values = intensity.values
+    intensity_values = intensity_values[intensity_values > 0]  # Remove zero (unvoiced parts)
+
+    if len(intensity_values) == 0:
+        return None  # No voiced frames detected
+    
+    return np.std(intensity_values)
+
+def compute_avg_intensity_numpy(file, sr = 16000):
+    sound = parselmouth.Sound(values = file, sampling_frequency = sr)
+    
+    # Extract intensity using Praat's method
+    # intensity = sound.to_intensity(subtract_mean=False)
+    intensity = sound.to_intensity()
+    
+    # Get intensity values
+    intensity_values = intensity.values
+    intensity_values = intensity_values[intensity_values > 0]  # Remove zero (unvoiced parts)
+
+    if len(intensity_values) == 0:
+        return None  # No voiced frames detected
+    
+    return np.mean(intensity_values)
+
+def compute_std_intensity_numpy(file, sr = 16000):
+    sound = parselmouth.Sound(values = file, sampling_frequency = sr)
+    
+    # Extract intensity using Praat's method
+    # intensity = sound.to_intensity(subtract_mean=False)
+    intensity = sound.to_intensity()
+    
+    # Get intensity values
+    intensity_values = intensity.values
+    intensity_values = intensity_values[intensity_values > 0]  # Remove zero (unvoiced parts)
+
+    if len(intensity_values) == 0:
+        return None  # No voiced frames detected
+    
+    return np.std(intensity_values)
+
 def plot_pitch_vs_pc(utt_compressed, average_pitch, gender_labels, hertz_or_semi = "hertz"):    
 # Assign colors based on gender
     colors = ["blue" if g == "M" else "red" for g in gender_labels]
@@ -305,7 +370,7 @@ def plot_pitch_vs_pc(utt_compressed, average_pitch, gender_labels, hertz_or_semi
         ax.scatter(average_pitch, pc_values, c=colors, alpha=0.7)
 
         # Only plot trend line if r-value (correlation coefficient) is larger than 0.7 (absolute of r-value) (since this shows a strong linear relationship)
-        if abs(r_value) >= 0.7:
+        if abs(r_value) >= 0.4:
             x_vals = np.linspace(min(average_pitch), max(average_pitch), 100)
             y_vals = slope * x_vals + intercept
             ax.plot(x_vals, y_vals, color="black", linestyle="--", label=f"Trend (r={r_value:.2f})")
@@ -325,8 +390,8 @@ def plot_pitch_vs_pc(utt_compressed, average_pitch, gender_labels, hertz_or_semi
     plt.tight_layout()
     plt.show()
 
-def plot_top_linear_pitch_vs_pc(utt_compressed, average_pitch, gender_labels, threshold = 0.4, hertz_or_semi = "hertz"):    
-# Assign colors based on gender
+def plot_top_linear_feature_vs_pc(utt_compressed, feature, gender_labels, label, threshold = 0.4):    
+    # Assign colors based on gender
     colors = ["blue" if g == "M" else "red" for g in gender_labels]
 
     lin_pc = []
@@ -335,7 +400,7 @@ def plot_top_linear_pitch_vs_pc(utt_compressed, average_pitch, gender_labels, th
         pc_values = utt_compressed[:, i]  # Extract principal component `i`
             
         # Fit a trend line if correlation is significant
-        slope, intercept, r_value, p_value, std_err = linregress(average_pitch.squeeze(), pc_values)
+        slope, intercept, r_value, p_value, std_err = linregress(feature.squeeze(), pc_values)
         
         if abs(r_value) >= threshold:
             lin_pc.append(i)
@@ -352,23 +417,20 @@ def plot_top_linear_pitch_vs_pc(utt_compressed, average_pitch, gender_labels, th
         pc_values = utt_compressed[:, lin_pc[i]]  # Extract principal component `i`
         
         # Fit a trend line if correlation is significant
-        slope, intercept, r_value, p_value, std_err = linregress(average_pitch.squeeze(), pc_values)
+        slope, intercept, r_value, p_value, std_err = linregress(feature.squeeze(), pc_values)
 
         # Scatter plot
         ax = axes[i]
-        ax.scatter(average_pitch, pc_values, c=colors, alpha=0.7)
+        ax.scatter(feature, pc_values, c=colors, alpha=0.7)
         
-        x_vals = np.linspace(min(average_pitch), max(average_pitch), 100)
+        x_vals = np.linspace(min(feature), max(feature), 100)
         y_vals = slope * x_vals + intercept
         ax.plot(x_vals, y_vals, color="black", linestyle="--", label=f"Trend (r={r_value:.2f})")
 
         # Labels and title
-        if hertz_or_semi == "hertz":
-            ax.set_xlabel("Average Pitch (Hz)")
-        else:
-            ax.set_xlabel("Average Pitch (Semitones)")
+        ax.set_xlabel(f"Average {label}")
         ax.set_ylabel(f"PC {lin_pc[i]+1} Value")
-        ax.set_title(f"Principal Component {lin_pc[i]+1} vs Pitch")
+        ax.set_title(f"Principal Component {lin_pc[i]+1} vs {label}")
         # ax.legend(["Trend Line" if p_value < 0.05 else None, "Male", "Female"], loc="best")
         ax.grid(True, linestyle="--", alpha=0.6)
 
@@ -708,3 +770,63 @@ def detect_and_handle_pitch_outliers(pitch_values):
 
     # Unvoiced values are preserved
     return cleaned_pitch, outlier_mask
+
+def get_jitter(audio_file, pitch_floor = 70, pitch_ceiling = 400):
+    snd = parselmouth.Sound(audio_file)
+    pointProcess = call(snd, "To PointProcess (periodic, cc)", pitch_floor, pitch_ceiling)
+    local_jitter = call(pointProcess, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
+    local_abs_jitter = call(pointProcess, "Get jitter (local, absolute)", 0, 0, 0.0001, 0.02, 1.3)
+    rap_jitter = call(pointProcess, "Get jitter (rap)", 0, 0, 0.0001, 0.02, 1.3)
+    ppq5_jitter = call(pointProcess, "Get jitter (ppq5)", 0, 0, 0.0001, 0.02, 1.3)
+    ddp_jitter = call(pointProcess, "Get jitter (ddp)", 0, 0, 0.0001, 0.02, 1.3)
+
+    return local_jitter, local_abs_jitter, rap_jitter, ppq5_jitter, ddp_jitter
+
+def get_shimmer(audio_file, pitch_floor = 70, pitch_ceiling = 400):
+    snd = parselmouth.Sound(audio_file)
+    pointProcess = call(snd, "To PointProcess (periodic, cc)", pitch_floor, pitch_ceiling)
+    local_shimmer =  call([snd, pointProcess], "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+    local_shimmer_db = call([snd, pointProcess], "Get shimmer (local_dB)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+    apq3_shimmer = call([snd, pointProcess], "Get shimmer (apq3)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+    apq5_shimmer = call([snd, pointProcess], "Get shimmer (apq5)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+    apq11_shimmer =  call([snd, pointProcess], "Get shimmer (apq11)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+    dda_shimmer = call([snd, pointProcess], "Get shimmer (dda)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+
+    return local_shimmer, local_shimmer_db, apq3_shimmer, apq5_shimmer, apq11_shimmer, dda_shimmer
+
+def get_hnr(audio_file, pitch_floor = 70, pitch_ceiling = 400):
+    snd = parselmouth.Sound(audio_file)
+    harmonicity = call(snd, "To Harmonicity (cc)", 0.01, pitch_floor, 0.1, 1.0)
+    hnr = call(harmonicity, "Get mean", 0, 0)
+
+    return hnr, harmonicity
+
+def get_jitter_numpy(file, sr = 16000, pitch_floor = 70, pitch_ceiling = 400):
+    snd = parselmouth.Sound(values = file, sampling_frequency = sr)
+    pointProcess = call(snd, "To PointProcess (periodic, cc)", pitch_floor, pitch_ceiling)
+    local_jitter = call(pointProcess, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
+    local_abs_jitter = call(pointProcess, "Get jitter (local, absolute)", 0, 0, 0.0001, 0.02, 1.3)
+    rap_jitter = call(pointProcess, "Get jitter (rap)", 0, 0, 0.0001, 0.02, 1.3)
+    ppq5_jitter = call(pointProcess, "Get jitter (ppq5)", 0, 0, 0.0001, 0.02, 1.3)
+    ddp_jitter = call(pointProcess, "Get jitter (ddp)", 0, 0, 0.0001, 0.02, 1.3)
+
+    return local_jitter, local_abs_jitter, rap_jitter, ppq5_jitter, ddp_jitter
+
+def get_shimmer_numpy(file, sr = 16000,  pitch_floor = 70, pitch_ceiling = 400):
+    snd = parselmouth.Sound(values = file, sampling_frequency = sr)
+    pointProcess = call(snd, "To PointProcess (periodic, cc)", pitch_floor, pitch_ceiling)
+    local_shimmer =  call([snd, pointProcess], "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+    local_shimmer_db = call([snd, pointProcess], "Get shimmer (local_dB)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+    apq3_shimmer = call([snd, pointProcess], "Get shimmer (apq3)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+    apq5_shimmer = call([snd, pointProcess], "Get shimmer (apq5)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+    apq11_shimmer =  call([snd, pointProcess], "Get shimmer (apq11)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+    dda_shimmer = call([snd, pointProcess], "Get shimmer (dda)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+
+    return local_shimmer, local_shimmer_db, apq3_shimmer, apq5_shimmer, apq11_shimmer, dda_shimmer
+
+def get_hnr_numpy(file, sr = 16000, pitch_floor = 70, pitch_ceiling = 400):
+    snd = parselmouth.Sound(values = file, sampling_frequency = sr)
+    harmonicity = call(snd, "To Harmonicity (cc)", 0.01, pitch_floor, 0.1, 1.0)
+    hnr = call(harmonicity, "Get mean", 0, 0)
+
+    return hnr, harmonicity

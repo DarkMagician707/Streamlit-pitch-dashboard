@@ -36,7 +36,7 @@ def load_models():
 # Use the cached function
 wavlm, hifigan, utt_pca, lin_model_pc1, lin_model_pc4, lin_model_lib_pc1, lin_model_lib_pc4, rf_model = load_models()
 
-st.title("Pitch control using PCA")
+st.title("Pitch control using Utterance-level PCA")
 
 # Specify the directory
 folder_path = Path('audio/')
