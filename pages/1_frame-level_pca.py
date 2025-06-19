@@ -198,5 +198,5 @@ try:
         st.pyplot(changed_plt)
 
 except Exception as e:
-    st.error(f"Error while loading spectrogram. It's a problem with the slider sensitivity, please reload and try not to move sliders for too long at a time :)")
+    # st.error(f"Error while loading spectrogram. It's a problem with the slider sensitivity, please reload and try not to move sliders for too long at a time :)")
     st.error(f"{e}")
